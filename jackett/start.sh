@@ -1,4 +1,32 @@
 #!/bin/bash
+
+echo "Up script executed with $*"
+if [[ "$4" = "" ]]; then
+  echo "ERROR, unable to obtain tunnel address"
+  echo "killing $PPID"
+  kill -9 $PPID
+  exit 1
+fi
+
+# If jackett-pre-start.sh exists, run it
+if [[ -x /scripts/jackett-pre-start.sh ]]; then
+  echo "Executing /scripts/jackett-pre-start.sh"
+  /scripts/jackett-pre-start.sh "$@"
+  echo "/scripts/jackett-pre-start.sh returned $?"
+fi
+
+echo "Updating JACKETT_BIND_ADDRESS_IPV4 to the ip of $1 : $4"
+export JACKETT_BIND_ADDRESS_IPV4=$4
+# Also update the persisted settings in case it is already set. First remove any old value, then add new.
+sed -i '/JACKETT_BIND_ADDRESS_IPV4/d' /etc/jackett/environment-variables.sh
+echo "export JACKETT_BIND_ADDRESS_IPV4=$4" >>/etc/jackett/environment-variables.sh
+
+if [[ ! -e "/dev/random" ]]; then
+  # Avoid "Fatal: no entropy gathering module detected" error
+  echo "INFO: /dev/random not found - symlink to /dev/urandom"
+  ln -s /dev/urandom /dev/random
+fi
+
 # Check if /config/Jackett exists, if not make the directory
 if [[ ! -e /config/Jackett ]]; then
 	mkdir -p /config/Jackett
@@ -110,44 +138,8 @@ if [ -e /proc/$jackettpid ]; then
 	if [[ -e /config/Jackett/Logs/log.txt ]]; then
 		chmod 775 /config/Jackett/Logs/log.txt
 	fi
-	
-	# Set some variables that are used
-	HOST=${HEALTH_CHECK_HOST}
-	DEFAULT_HOST="one.one.one.one"
-	INTERVAL=${HEALTH_CHECK_INTERVAL}
-	DEFAULT_INTERVAL=300
-	
-	# If host is zero (not set) default it to the DEFAULT_HOST variable
-	if [[ -z "${HOST}" ]]; then
-		echo "[INFO] HEALTH_CHECK_HOST is not set. For now using default host ${DEFAULT_HOST}" | ts '%Y-%m-%d %H:%M:%.S'
-		HOST=${DEFAULT_HOST}
-	fi
-
-	# If HEALTH_CHECK_INTERVAL is zero (not set) default it to DEFAULT_INTERVAL
-	if [[ -z "${HEALTH_CHECK_INTERVAL}" ]]; then
-		echo "[INFO] HEALTH_CHECK_INTERVAL is not set. For now using default interval of ${DEFAULT_INTERVAL}" | ts '%Y-%m-%d %H:%M:%.S'
-		INTERVAL=${DEFAULT_INTERVAL}
-	fi
-	
-	# If HEALTH_CHECK_SILENT is zero (not set) default it to supression
-	if [[ -z "${HEALTH_CHECK_SILENT}" ]]; then
-		echo "[INFO] HEALTH_CHECK_SILENT is not set. Because this variable is not set, it will be supressed by default" | ts '%Y-%m-%d %H:%M:%.S'
-		HEALTH_CHECK_SILENT=1
-	fi
-
-	while true; do
-		# Ping uses both exit codes 1 and 2. Exit code 2 cannot be used for docker health checks, therefore we use this script to catch error code 2
-		ping -c 1 $HOST > /dev/null 2>&1
-		STATUS=$?
-		if [[ "${STATUS}" -ne 0 ]]; then
-			echo "[ERROR] Network is down, exiting this Docker" | ts '%Y-%m-%d %H:%M:%.S'
-			exit 1
-		fi
-		if [ ! "${HEALTH_CHECK_SILENT}" -eq 1 ]; then
-			echo "[INFO] Network is up" | ts '%Y-%m-%d %H:%M:%.S'
-		fi
-		sleep ${INTERVAL}
-	done
 else
 	echo "[ERROR] Jackett failed to start!" | ts '%Y-%m-%d %H:%M:%.S'
 fi
+
+echo "Jackett startup script complete"

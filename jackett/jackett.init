@@ -33,6 +33,8 @@ DAEMON_ARGS="--NoRestart --NoUpdates"
 DAEMONSTRING="$DAEMON $DAEMON_ARGS >> $JACKETTLOGPATH$JACKETTLOG 2>&1"
 
 export DBUS_SESSION_BUS_ADDRESS=""
+export XDG_CONFIG_HOME="/config" 
+export XDG_DATA_HOME="/config" 
 
 umask 002
 
